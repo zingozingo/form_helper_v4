@@ -1,0 +1,15 @@
+# Node modules
+node_modules/
+
+# Mac files
+.DS_Store
+
+# Chrome extension temp files
+*.crx
+*.pem
+
+# IDE files
+.vscode/settings.json
+
+# Logs
+*.log
