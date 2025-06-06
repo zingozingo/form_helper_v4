@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventBus + PageMonitor Foundation Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        /* Stats Bar */
+        .stats-bar {
+            background: #2c3e50;
+            color: white;
+            padding: 6px 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stat-label {
+            color: #95a5a6;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            font-size: 14px;
+            color: #3498db;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 20px;
+        }
+        
+        .header p {
+            margin: 0;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #5a67d8;
+        }
+        
+        .btn-secondary {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #38a169;
+        }
+        
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #c53030;
+        }
+        
+        /* Button Groups */
+        .button-groups {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        
+        .button-group {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .button-group h4 {
+            margin: 0 0 5px 0;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #718096;
+            letter-spacing: 0.5px;
+        }
+        
+        .button-group .btn {
+            width: 100%;
+            margin: 3px 0;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        
+        /* Event Color Coding */
+        .working-event {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            transition: background 0.2s;
+            min-width: 500px; /* Ensure consistent width */
+        }
+        
+        /* Fixed width for event components */
+        .working-event .event-icon {
+            flex: 0 0 20px;
+        }
+        
+        .working-event .event-time {
+            flex: 0 0 80px;
+            font-family: monospace;
+        }
+        
+        .working-event .event-type {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .working-event.page-event {
+            background: #e6f3ff;
+            color: #0066cc;
+            border-left: 3px solid #0066cc;
+        }
+        
+        .working-event.form-event {
+            background: #fff9e6;
+            color: #cc8800;
+            border-left: 3px solid #cc8800;
+        }
+        
+        .working-event.module-event {
+            background: #e6ffe6;
+            color: #008800;
+            border-left: 3px solid #008800;
+        }
+        
+        .working-event.test-event {
+            background: #f3e6ff;
+            color: #6600cc;
+            border-left: 3px solid #6600cc;
+        }
+        
+        .event-icon {
+            font-size: 12px;
+        }
+        
+        /* Event Filters */
+        .event-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn:hover {
+            background: #f7fafc;
+        }
+        
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .status-panel {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        }
+        
+        .status-panel h2 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 6px;
+        }
+        
+        .module-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .status-card {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .status-card.active {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        
+        .status-card.error {
+            border-color: #e53e3e;
+            background: #fff5f5;
+        }
+        
+        .status-card h3 {
+            margin: 0 0 5px 0;
+            color: #2d3748;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #cbd5e0;
+        }
+        
+        .status-indicator.active {
+            background: #48bb78;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .status-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 5px 0;
+        }
+        
+        .status-info {
+            font-size: 11px;
+            color: #718096;
+        }
+        
+        .event-log {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .event-log h2 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* Collapsible Complex Event Log */
+        .event-log.complex-log {
+            position: relative;
+        }
+        
+        .event-log.complex-log.collapsed .event-stats {
+            display: none;
+        }
+        
+        .event-log.complex-log.collapsed .event-container {
+            display: none;
+        }
+        
+        .collapse-toggle {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .collapse-toggle:hover {
+            background: #5a67d8;
+        }
+        
+        .log-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .log-control {
+            font-size: 12px;
+            color: #667eea;
+            cursor: pointer;
+            font-weight: normal;
+            padding: 4px 8px;
+            border: 1px solid #667eea;
+            border-radius: 3px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+        
+        .log-control:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .log-control.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .event-stats {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+        }
+        
+        .event-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .event-stat-label {
+            color: #718096;
+        }
+        
+        .event-stat-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .event-container {
+            max-height: 350px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            position: relative;
+        }
+        
+        .event-container.paused {
+            opacity: 0.7;
+        }
+        
+        .event-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+            border-radius: 3px;
+            transition: all 0.5s ease;
+            position: relative;
+        }
+        
+        .event-item.new {
+            background: #fef3c7;
+            border-left-color: #f59e0b;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+            font-weight: bold;
+        }
+        
+        .event-item.recent {
+            background: #e6f7ff;
+            border-left-color: #1890ff;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .event-name {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .event-time {
+            color: #718096;
+            font-size: 12px;
+        }
+        
+        .event-data {
+            color: #4a5568;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .event-icon {
+            margin-right: 4px;
+            font-size: 16px;
+        }
+        
+        .event-description {
+            color: #4a5568;
+            font-size: 12px;
+            margin-top: 5px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .event-line {
+            padding: 2px 0;
+            opacity: 0.9;
+        }
+        
+        .event-line:first-child {
+            font-weight: 500;
+            opacity: 1;
+        }
+        
+        .test-forms {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 10px;
+        }
+        
+        .test-forms h3 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .test-form {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .test-form.visible {
+            display: block;
+        }
+        
+        .test-form input, .test-form select {
+            width: 100%;
+            padding: 6px;
+            margin: 3px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .info-box {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            color: #0050b3;
+            font-size: 13px;
+        }
+        
+        /* Fixed Width Live Events */
+        .live-events-container {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            min-width: 600px; /* Fixed minimum width */
+        }
+        
+        #workingEventsList {
+            max-height: 150px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 6px;
+            min-height: 150px; /* Fixed height to prevent layout shift */
+        }
+        
+        /* Two Column Layout */
+        .two-column-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            height: 350px; /* Fixed height */
+        }
+        
+        .column-left {
+            flex: 0 0 60%;
+            height: 100%;
+        }
+        
+        .column-right {
+            flex: 0 0 calc(40% - 15px);
+            height: 100%;
+        }
+        
+        /* Equal height columns with fixed dimensions */
+        .event-log.complex-log,
+        .test-forms {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .event-log.complex-log .event-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .test-forms .test-form-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        /* Remove margin from test-forms since it's in column layout now */
+        .test-forms {
+            margin-top: 0;
+        }
+        
+        /* Ensure the collapsed state still works */
+        .event-log.complex-log.collapsed {
+            height: 100%;
+        }
+        
+        .event-log.complex-log.collapsed .event-container {
+            display: none;
+        }
+        
+        /* Page Change Animation */
+        .page-flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(255, 255, 255, 0.3));
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            animation: flashAnimation 0.4s ease-out;
+        }
+
+        @keyframes flashAnimation {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .page-change-toast {
+            position: fixed;
+            top: 20px;
+            right: -300px;
+            background: white;
+            border-radius: 8px;
+            padding: 16px 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10000;
+            animation: slideInOut 2s ease-out;
+        }
+
+        @keyframes slideInOut {
+            0% { right: -300px; }
+            15% { right: 20px; }
+            85% { right: 20px; }
+            100% { right: -300px; }
+        }
+
+        .page-change-toast .icon {
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
+
+        .page-change-toast .message {
+            color: #1f2937;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div>
+                <div class="stat-label">Events/sec</div>
+                <div class="stat-value" id="eventsPerSec">0</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div>
+                <div class="stat-label">Total Events</div>
+                <div class="stat-value" id="totalEvents">0</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div>
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value" id="uptime">0:00</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div>
+                <div class="stat-label">Active Modules</div>
+                <div class="stat-value" id="activeModules">0</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ EventBus + PageMonitor Foundation Test</h1>
+            <p>Testing our decoupled architecture with real modules</p>
+        </div>
+
+        <div class="info-box">
+            <strong>Architecture Pattern:</strong> EventBus → PageMonitor (extends BaseBlock) → Events Only
+            <br>No direct coupling, all communication through events!
+        </div>
+
+        <div class="button-groups">
+            <div class="button-group">
+                <h4>System Controls</h4>
+                <button id="initBtn" class="btn btn-primary">
+                    🚀 Initialize System
+                </button>
+                <button id="stopBtn" class="btn btn-danger" onclick="stopSystem()" disabled>
+                    🛑 Stop System
+                </button>
+            </div>
+            
+            <div class="button-group">
+                <h4>Page Tests</h4>
+                <button class="btn btn-secondary" onclick="simulatePageChange()" disabled id="pageChangeBtn">
+                    📄 Simulate Page Change
+                </button>
+                <button class="btn btn-secondary" onclick="addDynamicContent()" disabled id="domBtn">
+                    🔄 Add Dynamic Content
+                </button>
+            </div>
+            
+            <div class="button-group">
+                <h4>Form Tests</h4>
+                <button class="btn btn-secondary" onclick="toggleTestForm()" disabled id="formBtn">
+                    📝 Toggle Test Form
+                </button>
+            </div>
+            
+            <div class="button-group">
+                <h4>Debug</h4>
+                <button class="btn btn-secondary" onclick="testDirectEvent()" style="background: #8b5cf6;">
+                    🧪 Test Direct Event
+                </button>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <h2>📊 Module Status</h2>
+            <div class="module-status">
+                <div class="status-card" id="eventBusCard">
+                    <h3><span class="status-indicator"></span>EventBus</h3>
+                    <div class="status-value" id="eventBusStatus">Not Initialized</div>
+                    <div class="status-info" id="eventBusInfo">-</div>
+                </div>
+                <div class="status-card" id="pageMonitorCard">
+                    <h3><span class="status-indicator"></span>PageMonitor</h3>
+                    <div class="status-value" id="pageMonitorStatus">Not Initialized</div>
+                    <div class="status-info" id="pageMonitorInfo">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simple Working Event Display with Fixed Width -->
+        <div class="live-events-container">
+            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 16px;">🔥 Live Events</h3>
+            
+            <!-- Event Filters -->
+            <div class="event-filters">
+                <button class="filter-btn active" onclick="filterEvents('all')" data-filter="all">All Events</button>
+                <button class="filter-btn" onclick="filterEvents('page')" data-filter="page">Page Events</button>
+                <button class="filter-btn" onclick="filterEvents('form')" data-filter="form">Form Events</button>
+                <button class="filter-btn" onclick="filterEvents('module')" data-filter="module">Module Events</button>
+            </div>
+            
+            <div id="workingEventsList">
+                <div style="color: #666; text-align: center; padding: 10px; font-size: 12px;">Waiting for events...</div>
+            </div>
+            <button onclick="clearWorkingEvents()" style="margin-top: 10px; padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear Events</button>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-column-container">
+            <!-- Left Column: Complex Event Log -->
+            <div class="column-left">
+                <div class="event-log complex-log collapsed" id="complexEventLog">
+                    <h2>
+                        🔍 Event Log (Complex Display)
+                        <div class="log-controls">
+                            <button class="collapse-toggle" onclick="toggleComplexLog()">Expand ▼</button>
+                            <button class="log-control" id="pauseBtn" onclick="togglePause()">⏸️ Pause</button>
+                            <button class="log-control" onclick="clearEventLog()">🗑️ Clear</button>
+                        </div>
+                    </h2>
+                    <div class="event-stats">
+                        <div class="event-stat">
+                            <span class="event-stat-label">Total Events:</span>
+                            <span class="event-stat-value" id="totalEventCount">0</span>
+                        </div>
+                        <div class="event-stat">
+                            <span class="event-stat-label">Events/sec:</span>
+                            <span class="event-stat-value" id="eventsPerSecond">0</span>
+                        </div>
+                        <div class="event-stat">
+                            <span class="event-stat-label">Last Event:</span>
+                            <span class="event-stat-value" id="lastEventType">-</span>
+                        </div>
+                    </div>
+                    <div class="event-container" id="eventContainer"></div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Test Form Area -->
+            <div class="column-right">
+                <div class="test-forms">
+                    <h3>Test Form Area</h3>
+                    <div class="test-form-wrapper">
+                        <div id="testForm" class="test-form">
+                            <!-- Form will be dynamically created here -->
+                        </div>
+                        <p id="formMessage" style="margin: 10px 0; font-size: 13px;">Click "Toggle Test Form" to test form detection</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load our actual modules -->
+    <script src="../../src/shared/EventBus.js"></script>
+    <script src="../../src/shared/BaseBlock.js"></script>
+    <script src="../../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        // Debug: Confirm script is loading
+        console.log('🟢 Script starting to load...');
+        console.log('🟢 Current URL:', window.location.href);
+        console.log('🔍 EventBus available:', typeof EventBus);
+        console.log('🔍 BaseBlock available:', typeof BaseBlock);
+        console.log('🔍 PageMonitor available:', typeof PageMonitor);
+        
+        let eventBus = null;
+        let pageMonitor = null;
+        let eventCount = 0;
+        let isPaused = false;
+        let eventQueue = [];
+        let eventTimestamps = [];
+        let eventsPerSec = 0;
+        let lastUpdateTime = 0;
+        let updateThrottle = null;
+        let activeAnimations = new Set();
+        let statsUpdateTimer = null;
+        let systemStartTime = null;
+        let currentFilter = 'all';
+        let eventRateHistory = [];
+
+        // Working Simple Display - NO COMPLEX FEATURES
+        let workingEventsList = [];
+
+        function addWorkingEvent(eventType) {
+            console.log(`✅ Working Display adding: ${eventType}`);
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Determine event category and icon
+            let category = 'default';
+            let icon = '🔸';
+            
+            if (eventType.includes('page:')) {
+                category = 'page-event';
+                icon = '🔵';
+            } else if (eventType.includes('forms:')) {
+                category = 'form-event';
+                icon = '🟡';
+            } else if (eventType.includes('module:')) {
+                category = 'module-event';
+                icon = '🟢';
+            } else if (eventType.includes('test:') || eventType.includes('content:')) {
+                category = 'test-event';
+                icon = '🟣';
+            }
+            
+            const eventData = {
+                timestamp,
+                type: eventType,
+                category,
+                icon
+            };
+            
+            // Add to beginning of list
+            workingEventsList.unshift(eventData);
+            
+            // Keep only last 6 events for compact display
+            if (workingEventsList.length > 6) {
+                workingEventsList = workingEventsList.slice(0, 6);
+            }
+            
+            // Update display immediately
+            updateWorkingDisplay();
+            
+            // Update stats
+            updateStatsBar();
+        }
+
+        function updateWorkingDisplay() {
+            const container = document.getElementById('workingEventsList');
+            if (container) {
+                if (workingEventsList.length === 0) {
+                    container.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">Waiting for events...</div>';
+                } else {
+                    // Filter events based on current filter
+                    const filteredEvents = currentFilter === 'all' 
+                        ? workingEventsList 
+                        : workingEventsList.filter(event => {
+                            if (currentFilter === 'page') return event.category === 'page-event';
+                            if (currentFilter === 'form') return event.category === 'form-event';
+                            if (currentFilter === 'module') return event.category === 'module-event';
+                            return false;
+                        });
+                    
+                    if (filteredEvents.length === 0) {
+                        container.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No events match the current filter</div>';
+                    } else {
+                        container.innerHTML = filteredEvents.map(event => 
+                            `<div class="working-event ${event.category}">
+                                <span class="event-icon">${event.icon}</span>
+                                <span class="event-time">${event.timestamp}</span>
+                                <span class="event-type">${event.type}</span>
+                            </div>`
+                        ).join('');
+                    }
+                }
+            }
+        }
+
+        function clearWorkingEvents() {
+            workingEventsList = [];
+            updateWorkingDisplay();
+        }
+
+        // Stats Bar Functions
+        function updateStatsBar() {
+            // Update events per second
+            const now = Date.now();
+            eventTimestamps.push(now);
+            
+            // Keep only events from last 5 seconds
+            const fiveSecondsAgo = now - 5000;
+            eventTimestamps = eventTimestamps.filter(t => t > fiveSecondsAgo);
+            
+            const eventsInLastSecond = eventTimestamps.filter(t => t > now - 1000).length;
+            document.getElementById('eventsPerSec').textContent = eventsInLastSecond;
+            
+            // Update total events
+            document.getElementById('totalEvents').textContent = eventCount;
+            
+            // Update uptime
+            if (systemStartTime) {
+                const uptimeMs = now - systemStartTime;
+                const minutes = Math.floor(uptimeMs / 60000);
+                const seconds = Math.floor((uptimeMs % 60000) / 1000);
+                document.getElementById('uptime').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // Update active modules
+            let activeModules = 0;
+            if (eventBus) activeModules++;
+            if (pageMonitor && pageMonitor.getState && pageMonitor.getState() === 'running') activeModules++;
+            document.getElementById('activeModules').textContent = activeModules;
+        }
+        
+        // Filter Functions
+        function filterEvents(type) {
+            currentFilter = type;
+            
+            // Update button states
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-filter') === type);
+            });
+            
+            // Update display
+            updateWorkingDisplay();
+        }
+        
+        // Collapsible Log Functions
+        function toggleComplexLog() {
+            const log = document.getElementById('complexEventLog');
+            const button = log.querySelector('.collapse-toggle');
+            
+            if (log.classList.contains('collapsed')) {
+                log.classList.remove('collapsed');
+                button.textContent = 'Collapse ▲';
+            } else {
+                log.classList.add('collapsed');
+                button.textContent = 'Expand ▼';
+            }
+        }
+        
+        // Start stats update timer
+        setInterval(updateStatsBar, 1000);
+
+        async function initializeSystem() {
+            console.log('🔵 Initialize button clicked!');
+            
+            // Check if already initialized
+            if (eventBus && pageMonitor) {
+                console.warn('System already initialized');
+                return;
+            }
+            
+            try {
+                console.log('🚀 Initializing Foundation Architecture...');
+                
+                // Create EventBus instance
+                eventBus = new EventBus({
+                    debugMode: true,
+                    enforceModuleRegistration: false, // Allow test page to listen without registration
+                    errorIsolation: true,
+                    performanceTracking: true
+                });
+                
+                console.log('✅ EventBus created');
+                
+                // Create PageMonitor instance
+                pageMonitor = new PageMonitor(eventBus, {
+                    debugMode: true,
+                    mutationThrottle: 250,  // Balanced for responsiveness
+                    domStabilizationDelay: 300,  // Quick but stable
+                    enableFormDetection: true,
+                    enableAjaxMonitoring: true,
+                    significantChangeThreshold: 8  // Higher threshold to prevent duplicate events
+                });
+                
+                console.log('✅ PageMonitor created');
+                
+                // Set up event listeners to display in UI
+                setupEventListeners();
+                
+                // Start PageMonitor
+                await pageMonitor.start();
+                console.log('✅ PageMonitor started');
+                
+                // Set system start time
+                systemStartTime = Date.now();
+                
+                // Update UI
+                updateStatus();
+                enableControls(true);
+                
+                // Make available for debugging
+                window.__eventBus = eventBus;
+                window.__pageMonitor = pageMonitor;
+                
+                console.log('✅ System initialized successfully!');
+                
+            } catch (error) {
+                console.error('❌ Initialization failed:', error);
+                console.error('Error stack:', error.stack);
+                alert(`Failed to initialize system: ${error.message}\n\nCheck console for details.`);
+                
+                // Reset UI
+                document.getElementById('eventBusStatus').textContent = 'Error';
+                document.getElementById('pageMonitorStatus').textContent = 'Error';
+                document.getElementById('eventBusInfo').textContent = error.message;
+            }
+        }
+
+        function setupEventListeners() {
+            // Listen to all PageMonitor events
+            const events = [
+                'page:initial',
+                'page:changed',
+                'page:url:changed',
+                'page:dom:mutated',
+                'forms:detected',
+                'page:ajax:complete',
+                'module:started',
+                'module:stopped',
+                'module:state:changed',
+                'module:error',
+                'content:added',      // Manual content addition event
+                'content:removed',    // Manual content removal event
+                'test:direct:event'   // Single test event
+            ];
+            
+            events.forEach(eventName => {
+                eventBus.on(eventName, (data) => {
+                    // Working display - direct call
+                    addWorkingEvent(eventName);
+                    
+                    // Complex display - may have issues
+                    logEvent(eventName, data);
+                    updateStatus();
+                });
+            });
+        }
+
+        function logEvent(eventName, data) {
+            eventCount++;
+            console.log(`📊 Event Log received: ${eventName}`);
+            
+            // Always update statistics
+            if (!statsUpdateTimer) {
+                statsUpdateTimer = setTimeout(() => {
+                    updateEventStats(eventName);
+                    statsUpdateTimer = null;
+                }, 250);
+            }
+            
+            // If paused, queue the event
+            if (isPaused) {
+                eventQueue.push({ eventName, data, time: new Date() });
+                // Limit queue size
+                if (eventQueue.length > 50) {
+                    eventQueue = eventQueue.slice(-50);
+                }
+                return;
+            }
+            
+            // Add to queue for processing
+            eventQueue.push({ eventName, data, time: new Date() });
+            
+            // Process queue with throttling
+            processEventQueue();
+        }
+        
+        function processEventQueue() {
+            const now = Date.now();
+            
+            // If we're still in throttle period, schedule for later
+            if (now - lastUpdateTime < 200) { // Increased from 100ms to 200ms
+                if (!updateThrottle) {
+                    updateThrottle = setTimeout(() => {
+                        updateThrottle = null;
+                        processEventQueue();
+                    }, 200);
+                }
+                return;
+            }
+            
+            // Process ONE event at a time for better visibility
+            if (eventQueue.length > 0 && !isPaused) {
+                const event = eventQueue.shift();
+                console.log(`✅ Displaying event: ${event.eventName}`);
+                displayEvent(event.eventName, event.data, event.time);
+                lastUpdateTime = Date.now();
+                
+                // Delay before processing next event
+                if (eventQueue.length > 0) {
+                    setTimeout(() => processEventQueue(), 300); // Increased delay
+                }
+            }
+        }
+
+        // Event type configurations for icons and colors
+        const eventConfig = {
+            'page:initial': { icon: '🚀', color: '#667eea' },
+            'page:changed': { icon: '✅', color: '#48bb78' },
+            'page:url:changed': { icon: '🔗', color: '#667eea' },
+            'page:dom:mutated': { icon: '⚡', color: '#ed8936' },
+            'forms:detected': { icon: '📝', color: '#38a169' },
+            'page:ajax:complete': { icon: '🔄', color: '#3182ce' },
+            'module:started': { icon: '▶️', color: '#667eea' },
+            'module:stopped': { icon: '⏹️', color: '#e53e3e' },
+            'module:state:changed': { icon: '🔀', color: '#667eea' },
+            'module:error': { icon: '❌', color: '#e53e3e' },
+            'content:added': { icon: '➕', color: '#10b981' },
+            'content:removed': { icon: '➖', color: '#f59e0b' },
+            'test:direct:event': { icon: '🧪', color: '#8b5cf6' }
+        };
+
+        function formatEventData(eventName, data) {
+            const lines = [];
+            
+            switch(eventName) {
+                case 'page:initial':
+                    lines.push(`Initial page scan completed`);
+                    if (data?.url) lines.push(`URL: ${data.url}`);
+                    if (data?.analysis?.forms?.length) {
+                        lines.push(`Found ${data.analysis.forms.length} form(s) on page`);
+                    }
+                    break;
+                    
+                case 'page:changed':
+                    lines.push(`Page content changed significantly`);
+                    if (data?.trigger) lines.push(`Trigger: ${data.trigger.replace('_', ' ')}`);
+                    if (data?.url) lines.push(`URL: ${data.url}`);
+                    if (data?.analysis?.forms?.length) {
+                        lines.push(`Forms on page: ${data.analysis.forms.length}`);
+                    }
+                    break;
+                    
+                case 'page:url:changed':
+                    lines.push(`Navigation detected`);
+                    if (data?.to) lines.push(`New URL: ${data.to}`);
+                    if (data?.type) lines.push(`Type: ${data.type.replace('_', ' ')}`);
+                    break;
+                    
+                case 'page:dom:mutated':
+                    lines.push(`DOM changes detected`);
+                    if (data?.summary) {
+                        if (data.summary.addedForms > 0) {
+                            lines.push(`Added ${data.summary.addedForms} form(s)`);
+                        }
+                        if (data.summary.removedForms > 0) {
+                            lines.push(`Removed ${data.summary.removedForms} form(s)`);
+                        }
+                        if (data.summary.affectedElements) {
+                            lines.push(`${data.summary.affectedElements} elements changed`);
+                        }
+                    }
+                    break;
+                    
+                case 'forms:detected':
+                    lines.push(`New forms discovered!`);
+                    if (data?.count !== undefined && data?.previousCount !== undefined) {
+                        lines.push(`Was: ${data.previousCount} → Now: ${data.count} forms`);
+                    } else if (data?.count !== undefined) {
+                        lines.push(`Total forms: ${data.count}`);
+                    }
+                    if (data?.forms?.[0]) {
+                        const form = data.forms[0];
+                        if (form.fields?.length) {
+                            lines.push(`New form has ${form.fields.length} fields`);
+                        }
+                    }
+                    break;
+                    
+                case 'module:started':
+                    lines.push(`Module started successfully`);
+                    if (data?.moduleId) lines.push(`Module: ${data.moduleId}`);
+                    break;
+                    
+                case 'module:stopped':
+                    lines.push(`Module stopped`);
+                    if (data?.moduleId) lines.push(`Module: ${data.moduleId}`);
+                    if (data?.uptime) lines.push(`Uptime: ${Math.floor(data.uptime / 1000)}s`);
+                    break;
+                    
+                case 'module:state:changed':
+                    lines.push(`Module state changed`);
+                    if (data?.from && data?.to) {
+                        lines.push(`${data.from} → ${data.to}`);
+                    }
+                    break;
+                    
+                case 'module:error':
+                    lines.push(`Module error occurred`);
+                    if (data?.error?.message) lines.push(`Error: ${data.error.message}`);
+                    break;
+                    
+                case 'content:added':
+                    lines.push(`Test content added to page`);
+                    if (data?.type) lines.push(`Type: ${data.type}`);
+                    if (data?.trigger) lines.push(`Trigger: ${data.trigger}`);
+                    break;
+                    
+                case 'content:removed':
+                    lines.push(`Test content removed from page`);
+                    if (data?.type) lines.push(`Type: ${data.type}`);
+                    if (data?.trigger) lines.push(`Trigger: ${data.trigger}`);
+                    break;
+                    
+                case 'test:direct:event':
+                    lines.push(`Direct test event`);
+                    if (data?.type) lines.push(`Type: ${data.type}`);
+                    if (data?.trigger) lines.push(`Trigger: ${data.trigger}`);
+                    break;
+                    
+                default:
+                    // For unknown events, try to extract key info
+                    if (data) {
+                        if (typeof data === 'string') {
+                            lines.push(data);
+                        } else if (data.message) {
+                            lines.push(data.message);
+                        } else if (data.type) {
+                            lines.push(`Type: ${data.type}`);
+                        }
+                    }
+            }
+            
+            return lines;
+        }
+
+        function displayEvent(eventName, data, time = new Date()) {
+            const container = document.getElementById('eventContainer');
+            
+            // Safety check - prevent too many active animations
+            if (activeAnimations.size > 50) {
+                console.warn('Too many active animations, clearing old ones');
+                activeAnimations.clear();
+            }
+            
+            // Safety check - limit container children
+            if (container.children.length >= 10) {
+                // Remove oldest without animation
+                const oldest = container.lastChild;
+                if (oldest) {
+                    container.removeChild(oldest);
+                }
+            }
+            
+            const eventItem = document.createElement('div');
+            eventItem.className = 'event-item new';
+            const itemId = `event-${Date.now()}-${Math.random()}`;
+            eventItem.id = itemId;
+            
+            const timeStr = time.toLocaleTimeString();
+            const config = eventConfig[eventName] || { icon: '🔍', color: '#718096' };
+            const description = formatEventData(eventName, data);
+            
+            eventItem.style.borderLeftColor = config.color;
+            eventItem.innerHTML = `
+                <div class="event-header">
+                    <span class="event-name"><span class="event-icon">${config.icon}</span> ${eventName}</span>
+                    <span class="event-time">${timeStr}</span>
+                </div>
+                <div class="event-description">
+                    ${description.map(line => `<div class="event-line">${line}</div>`).join('')}
+                </div>
+            `;
+            
+            container.insertBefore(eventItem, container.firstChild);
+            activeAnimations.add(itemId);
+            
+            // Highlight transitions: new -> recent -> normal
+            requestAnimationFrame(() => {
+                // Remove 'new' class after 3 seconds
+                setTimeout(() => {
+                    if (eventItem.parentNode) {
+                        eventItem.classList.remove('new');
+                        eventItem.classList.add('recent');
+                    }
+                }, 3000);
+                
+                // Remove 'recent' class after 6 seconds
+                setTimeout(() => {
+                    if (eventItem.parentNode) {
+                        eventItem.classList.remove('recent');
+                    }
+                    activeAnimations.delete(itemId);
+                }, 6000);
+            });
+            
+            // Remove old events immediately if over limit
+            while (container.children.length > 10) {
+                const oldest = container.lastChild;
+                if (oldest && oldest.id) {
+                    activeAnimations.delete(oldest.id);
+                }
+                container.removeChild(oldest);
+            }
+        }
+
+        function updateEventStats(eventName) {
+            // Update total count
+            document.getElementById('totalEventCount').textContent = eventCount;
+            
+            // Update last event type
+            document.getElementById('lastEventType').textContent = eventName.split(':')[0];
+            
+            // Calculate events per second
+            const now = Date.now();
+            eventTimestamps.push(now);
+            
+            // Keep only timestamps from last 5 seconds
+            eventTimestamps = eventTimestamps.filter(ts => now - ts < 5000);
+            
+            // Calculate rate
+            if (eventTimestamps.length > 1) {
+                const timeRange = (now - eventTimestamps[0]) / 1000;
+                eventsPerSec = (eventTimestamps.length / timeRange).toFixed(1);
+            } else {
+                eventsPerSec = 0;
+            }
+            
+            document.getElementById('eventsPerSecond').textContent = eventsPerSec;
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pauseBtn');
+            const container = document.getElementById('eventContainer');
+            
+            if (isPaused) {
+                pauseBtn.textContent = '▶️ Resume';
+                pauseBtn.classList.add('active');
+                container.classList.add('paused');
+            } else {
+                pauseBtn.textContent = '⏸️ Pause';
+                pauseBtn.classList.remove('active');
+                container.classList.remove('paused');
+                
+                // Display queued events
+                const queueCopy = [...eventQueue];
+                eventQueue = [];
+                queueCopy.forEach(({ eventName, data, time }) => {
+                    displayEvent(eventName, data, time);
+                });
+            }
+        }
+
+        function updateStatus() {
+            // Update EventBus status
+            if (eventBus) {
+                const stats = eventBus.getStats();
+                document.getElementById('eventBusStatus').textContent = 'Active';
+                document.getElementById('eventBusInfo').textContent = 
+                    `${stats.totalEvents} events • ${stats.totalListeners} listeners • ${stats.totalModules} modules`;
+                document.getElementById('eventBusCard').classList.add('active');
+                document.querySelector('#eventBusCard .status-indicator').classList.add('active');
+            }
+            
+            // Update PageMonitor status
+            if (pageMonitor) {
+                const state = pageMonitor.getState();
+                const health = pageMonitor.getHealth();
+                document.getElementById('pageMonitorStatus').textContent = 
+                    state.charAt(0).toUpperCase() + state.slice(1);
+                document.getElementById('pageMonitorInfo').textContent = 
+                    `Uptime: ${Math.floor(health.uptime / 1000)}s • ${health.eventStats.emitted} events emitted`;
+                
+                if (state === 'running') {
+                    document.getElementById('pageMonitorCard').classList.add('active');
+                    document.querySelector('#pageMonitorCard .status-indicator').classList.add('active');
+                }
+            }
+        }
+
+        async function stopSystem() {
+            try {
+                // Clear any pending updates first
+                if (updateThrottle) {
+                    clearTimeout(updateThrottle);
+                    updateThrottle = null;
+                }
+                if (statsUpdateTimer) {
+                    clearTimeout(statsUpdateTimer);
+                    statsUpdateTimer = null;
+                }
+                
+                if (pageMonitor) {
+                    await pageMonitor.stop();
+                    console.log('✅ PageMonitor stopped');
+                }
+                
+                eventBus = null;
+                pageMonitor = null;
+                
+                document.getElementById('eventBusStatus').textContent = 'Stopped';
+                document.getElementById('eventBusInfo').textContent = '-';
+                document.getElementById('pageMonitorStatus').textContent = 'Stopped';
+                document.getElementById('pageMonitorInfo').textContent = '-';
+                
+                document.querySelectorAll('.status-card').forEach(card => {
+                    card.classList.remove('active');
+                });
+                document.querySelectorAll('.status-indicator').forEach(indicator => {
+                    indicator.classList.remove('active');
+                });
+                
+                // Clear event log
+                clearEventLog();
+                
+                enableControls(false);
+                
+            } catch (error) {
+                console.error('❌ Error stopping system:', error);
+            }
+        }
+
+        function enableControls(enabled) {
+            document.getElementById('initBtn').disabled = enabled;
+            document.getElementById('stopBtn').disabled = !enabled;
+            document.getElementById('pageChangeBtn').disabled = !enabled;
+            document.getElementById('formBtn').disabled = !enabled;
+            document.getElementById('domBtn').disabled = !enabled;
+        }
+
+        function simulatePageChange() {
+            console.log('🔵 simulatePageChange button clicked');
+            
+            if (!eventBus || !pageMonitor) {
+                alert('System not initialized! Click "Initialize System" first.');
+                return;
+            }
+            
+            // Force emit page:changed event immediately
+            console.log('📤 Emitting page:changed event directly');
+            eventBus.emit('page:changed', {
+                trigger: 'manual_test',
+                url: window.location.href,
+                timestamp: new Date().toISOString(),
+                analysis: {
+                    title: document.title,
+                    forms: []
+                }
+            });
+            
+            // Create full-screen flash effect
+            const flashOverlay = document.createElement('div');
+            flashOverlay.className = 'page-flash-overlay';
+            document.body.appendChild(flashOverlay);
+            
+            // Create toast notification
+            const toast = document.createElement('div');
+            toast.className = 'page-change-toast';
+            toast.innerHTML = `
+                <div class="icon">✓</div>
+                <div class="message">Page change simulated</div>
+            `;
+            document.body.appendChild(toast);
+            
+            // Clean up animations after they complete
+            setTimeout(() => {
+                flashOverlay.remove();
+            }, 400);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 2000);
+            
+            // Also do actual DOM changes for realism
+            const oldTitle = document.title;
+            document.title = 'Page Changed - ' + new Date().toLocaleTimeString();
+            document.body.className = 'page-changed-' + Date.now();
+            
+            // Restore after animation
+            setTimeout(() => {
+                document.title = oldTitle;
+                document.body.className = '';
+            }, 400);
+        }
+
+        function toggleTestForm() {
+            if (!eventBus || !pageMonitor) {
+                alert('System not initialized! Click "Initialize System" first.');
+                return;
+            }
+            
+            const formContainer = document.getElementById('testForm');
+            const message = document.getElementById('formMessage');
+            const existingForm = formContainer.querySelector('form');
+            
+            if (existingForm) {
+                // Form exists - remove it silently (no event expected)
+                existingForm.remove();
+                formContainer.classList.remove('visible');
+                message.textContent = 'Form removed (silent - no event expected)';
+            } else {
+                // No form - add it (forms:detected event expected)
+                const newForm = document.createElement('form');
+                newForm.onsubmit = (e) => { e.preventDefault(); alert('Form submitted!'); };
+                newForm.innerHTML = `
+                    <input type="text" placeholder="Username" name="username">
+                    <input type="email" placeholder="Email" name="email">
+                    <input type="password" placeholder="Password" name="password">
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                `;
+                formContainer.appendChild(newForm);
+                formContainer.classList.add('visible');
+                message.textContent = 'Form added - expecting forms:detected event';
+            }
+        }
+
+        function addDynamicContent() {
+            if (!eventBus || !pageMonitor) {
+                alert('System not initialized! Click "Initialize System" first.');
+                return;
+            }
+            
+            // Emit content:added event
+            console.log('📤 Emitting content:added event');
+            eventBus.emit('content:added', {
+                type: 'test-content',
+                trigger: 'manual-button',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Create invisible content to trigger page:dom:mutated
+            const hiddenDiv = document.createElement('div');
+            hiddenDiv.setAttribute('data-test-content', 'true');
+            hiddenDiv.style.display = 'none';
+            hiddenDiv.innerHTML = `<span>Test content ${Date.now()}</span>`;
+            document.body.appendChild(hiddenDiv);
+            
+            // Remove after a short delay to clean up
+            setTimeout(() => {
+                hiddenDiv.remove();
+            }, 1000);
+        }
+
+        function clearEventLog() {
+            const container = document.getElementById('eventContainer');
+            
+            // Clear immediately for performance
+            container.innerHTML = '';
+            eventCount = 0;
+            eventQueue = [];
+            eventTimestamps = [];
+            activeAnimations.clear();
+            
+            // Clear any pending throttles
+            if (updateThrottle) {
+                clearTimeout(updateThrottle);
+                updateThrottle = null;
+            }
+            if (statsUpdateTimer) {
+                clearTimeout(statsUpdateTimer);
+                statsUpdateTimer = null;
+            }
+            
+            updateEventStats('');
+        }
+
+        // Test direct event emission
+        function testDirectEvent() {
+            console.log('🔵 Test Direct Event button clicked');
+            
+            if (!eventBus) {
+                alert('EventBus not initialized!');
+                return;
+            }
+            
+            // Emit ONLY ONE specific test event
+            eventBus.emit('test:direct:event', {
+                type: 'manual-test',
+                trigger: 'test-button',
+                timestamp: Date.now()
+            });
+            console.log('📤 Emitted test:direct:event');
+        }
+
+        // Update status every second
+        setInterval(() => {
+            if (pageMonitor && pageMonitor.getState() === 'running') {
+                updateStatus();
+            }
+        }, 1000);
+        
+        // Debug: Check if functions exist
+        console.log('🔍 initializeSystem exists:', typeof initializeSystem);
+        console.log('🔍 window.initializeSystem exists:', typeof window.initializeSystem);
+        
+        // Make functions globally accessible
+        window.initializeSystem = initializeSystem;
+        window.stopSystem = stopSystem;
+        window.filterEvents = filterEvents;
+        window.toggleComplexLog = toggleComplexLog;
+        window.clearWorkingEvents = clearWorkingEvents;
+        window.simulatePageChange = simulatePageChange;
+        window.toggleTestForm = toggleTestForm;
+        window.addDynamicContent = addDynamicContent;
+        window.testDirectEvent = testDirectEvent;
+        window.clearEventLog = clearEventLog;
+        window.togglePause = togglePause;
+        window.enableControls = enableControls;
+        window.updateStatus = updateStatus;
+        
+        console.log('🔍 After assignment - window.initializeSystem exists:', typeof window.initializeSystem);
+        
+        // Set up event listeners when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 DOM Content Loaded');
+            
+            const initBtn = document.getElementById('initBtn');
+            console.log('🔍 Initialize button found:', !!initBtn);
+            
+            if (initBtn) {
+                initBtn.addEventListener('click', function(e) {
+                    console.log('🖱️ Initialize button clicked via addEventListener');
+                    e.preventDefault();
+                    initializeSystem();
+                });
+                console.log('✅ Click listener attached to Initialize button');
+            } else {
+                console.error('❌ Initialize button not found!');
+            }
+            
+            // Check for any script errors
+            window.addEventListener('error', function(e) {
+                console.error('🚨 JavaScript Error:', e.message, 'at', e.filename, ':', e.lineno);
+            });
+        });
+        
+        // Additional error handler for syntax errors
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('🚨 Global Error:', msg, 'at line', lineNo);
+            return false;
+        };
+        
+        console.log('🟢 Script finished loading');
+        
+    </script>
+</body>
+</html>

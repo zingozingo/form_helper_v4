@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Initialize Button</title>
+    <style>
+        body { padding: 20px; font-family: Arial; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+        .log { background: #f0f0f0; padding: 20px; margin: 20px 0; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Debug Initialize Button</h1>
+    
+    <button id="testBtn1" onclick="testClick1()">Test onclick</button>
+    <button id="testBtn2">Test addEventListener</button>
+    <button id="testBtn3" onclick="window.testClick3()">Test window.onclick</button>
+    
+    <div class="log" id="log">Console output will appear here...</div>
+
+    <script>
+        // Debug output
+        const log = document.getElementById('log');
+        function addLog(msg) {
+            log.textContent += msg + '\n';
+            console.log(msg);
+        }
+        
+        addLog('Script starting...');
+        
+        // Test 1: Direct function
+        function testClick1() {
+            addLog('✅ testClick1 called via onclick');
+        }
+        
+        // Test 2: addEventListener
+        document.getElementById('testBtn2').addEventListener('click', function() {
+            addLog('✅ testBtn2 clicked via addEventListener');
+        });
+        
+        // Test 3: Window function
+        window.testClick3 = function() {
+            addLog('✅ testClick3 called via window.onclick');
+        };
+        
+        // Check what exists
+        addLog('typeof testClick1: ' + typeof testClick1);
+        addLog('typeof window.testClick1: ' + typeof window.testClick1);
+        addLog('typeof window.testClick3: ' + typeof window.testClick3);
+        
+        // Now test with modules
+        addLog('\nLoading modules...');
+    </script>
+    
+    <script src="../src/shared/EventBus.js"></script>
+    <script src="../src/shared/BaseBlock.js"></script>
+    <script src="../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        addLog('Modules loaded. Testing initialization...');
+        
+        async function initializeTest() {
+            addLog('initializeTest called!');
+            try {
+                const eb = new EventBus({ debugMode: true });
+                addLog('EventBus created: ' + !!eb);
+                
+                const pm = new PageMonitor(eb, { debugMode: true });
+                addLog('PageMonitor created: ' + !!pm);
+                
+                await pm.start();
+                addLog('PageMonitor started!');
+                
+                return true;
+            } catch (e) {
+                addLog('ERROR: ' + e.message);
+                return false;
+            }
+        }
+        
+        // Test button
+        const btn = document.createElement('button');
+        btn.textContent = 'Test Initialize';
+        btn.onclick = async function() {
+            addLog('\nTesting initialization...');
+            await initializeTest();
+        };
+        document.body.insertBefore(btn, document.getElementById('log'));
+        
+        addLog('\nAll tests ready.');
+    </script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .test-result.pass {
+            background: #d4edda;
+            color: #155724;
+        }
+        .test-result.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #console-output {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Verification - Event System</h1>
+    
+    <div class="test-section">
+        <h2>Console Output</h2>
+        <div id="console-output"></div>
+        <button onclick="clearConsole()">Clear Console</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 1: Toggle Form Test</h2>
+        <p>Expected: Only forms:detected event, NO page:changed event</p>
+        <button onclick="runFormTest()">Run Form Test (5 times)</button>
+        <div id="form-test-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: Add Content Test</h2>
+        <p>Expected: Only page:dom:mutated event after ~250ms delay</p>
+        <button onclick="runContentTest()">Run Content Test (5 times)</button>
+        <div id="content-test-results"></div>
+    </div>
+
+    <script src="../src/shared/EventBus.js"></script>
+    <script src="../src/shared/BaseBlock.js"></script>
+    <script src="../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        // Override console.log to capture output
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('console-output');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            consoleOutput.textContent += message + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+        
+        function clearConsole() {
+            consoleOutput.textContent = '';
+        }
+        
+        let eventBus, pageMonitor;
+        let eventLog = [];
+        
+        async function initialize() {
+            console.log('Initializing test system...');
+            
+            eventBus = new EventBus({
+                debugMode: true,
+                enforceModuleRegistration: true
+            });
+            
+            pageMonitor = new PageMonitor(eventBus, {
+                debugMode: true,
+                mutationThrottle: 250,
+                domStabilizationDelay: 300,
+                enableFormDetection: true,
+                significantChangeThreshold: 8
+            });
+            
+            // Log all events
+            const events = [
+                'page:initial', 'page:changed', 'page:url:changed',
+                'page:dom:mutated', 'forms:detected', 'page:ajax:complete'
+            ];
+            
+            events.forEach(eventName => {
+                eventBus.on(eventName, (data) => {
+                    const entry = {
+                        event: eventName,
+                        timestamp: Date.now(),
+                        data: data
+                    };
+                    eventLog.push(entry);
+                    console.log(`EVENT: ${eventName}`);
+                });
+            });
+            
+            await pageMonitor.start();
+            console.log('System initialized!');
+        }
+        
+        async function runFormTest() {
+            const resultsDiv = document.getElementById('form-test-results');
+            resultsDiv.innerHTML = '';
+            
+            for (let i = 0; i < 5; i++) {
+                console.log(`\n=== Form Test Run ${i + 1} ===`);
+                eventLog = [];
+                
+                // Create a test form container
+                const container = document.createElement('div');
+                container.id = `test-form-${i}`;
+                document.body.appendChild(container);
+                
+                // Add form
+                console.log('Adding form...');
+                const form = document.createElement('form');
+                form.innerHTML = '<input type="text"><button>Submit</button>';
+                container.appendChild(form);
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Check events
+                const addEvents = eventLog.filter(e => e.timestamp > Date.now() - 1100);
+                console.log(`Events after add: ${addEvents.map(e => e.event).join(', ')}`);
+                
+                // Remove form
+                console.log('Removing form...');
+                eventLog = [];
+                form.remove();
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Check events
+                const removeEvents = eventLog.filter(e => e.timestamp > Date.now() - 1100);
+                console.log(`Events after remove: ${removeEvents.map(e => e.event).join(', ')}`);
+                
+                // Clean up
+                container.remove();
+                
+                // Add result
+                const result = document.createElement('div');
+                result.className = 'test-result';
+                
+                const hasPageChanged = [...addEvents, ...removeEvents].some(e => e.event === 'page:changed');
+                const hasFormsDetected = [...addEvents, ...removeEvents].some(e => e.event === 'forms:detected');
+                
+                if (!hasPageChanged && hasFormsDetected) {
+                    result.className += ' pass';
+                    result.textContent = `Run ${i + 1}: PASS - Only forms:detected emitted`;
+                } else {
+                    result.className += ' fail';
+                    result.textContent = `Run ${i + 1}: FAIL - Events: ${[...addEvents, ...removeEvents].map(e => e.event).join(', ')}`;
+                }
+                
+                resultsDiv.appendChild(result);
+            }
+        }
+        
+        async function runContentTest() {
+            const resultsDiv = document.getElementById('content-test-results');
+            resultsDiv.innerHTML = '';
+            
+            for (let i = 0; i < 5; i++) {
+                console.log(`\n=== Content Test Run ${i + 1} ===`);
+                eventLog = [];
+                
+                // Add content
+                console.log('Adding content...');
+                const startTime = Date.now();
+                
+                const content = document.createElement('div');
+                content.innerHTML = '<h3>Test Content</h3><p>Some text</p>';
+                document.body.appendChild(content);
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Check events
+                const events = eventLog.filter(e => e.timestamp > startTime);
+                console.log(`Events: ${events.map(e => `${e.event} at +${e.timestamp - startTime}ms`).join(', ')}`);
+                
+                // Clean up
+                content.remove();
+                
+                // Add result
+                const result = document.createElement('div');
+                result.className = 'test-result';
+                
+                const domMutatedEvent = events.find(e => e.event === 'page:dom:mutated');
+                const delay = domMutatedEvent ? domMutatedEvent.timestamp - startTime : 0;
+                
+                if (domMutatedEvent && delay > 200 && delay < 400) {
+                    result.className += ' pass';
+                    result.textContent = `Run ${i + 1}: PASS - page:dom:mutated after ${delay}ms`;
+                } else {
+                    result.className += ' fail';
+                    result.textContent = `Run ${i + 1}: FAIL - ${domMutatedEvent ? `Delay: ${delay}ms` : 'No dom:mutated event'}`;
+                }
+                
+                resultsDiv.appendChild(result);
+            }
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', initialize);
+    </script>
+</body>
+</html>

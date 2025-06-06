@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Structure</title>
+</head>
+<body>
+    <h1>Structure Test</h1>
+    <button id="testBtn">Test</button>
+    
+    <script>
+        console.log('Starting...');
+        
+        // This mimics the structure of the main file
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            
+            const btn = document.getElementById('testBtn');
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    console.log('Button clicked');
+                });
+            }
+            
+            window.addEventListener('error', function(e) {
+                console.error('Error:', e.message);
+            });
+        });
+        
+        console.log('Script finished');
+    </script>
+</body>
+</html>

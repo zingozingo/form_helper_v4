@@ -32,6 +32,8 @@ class PageMonitor extends BaseBlock {
     };
     this._ajaxInterceptor = null;
     this._historyPatched = false;
+    this._lastFormCount = 0;
+    this._formChangeDebouncer = null;
   }
 
   async _onStart() {
@@ -177,6 +179,9 @@ class PageMonitor extends BaseBlock {
       timestamp: new Date().toISOString()
     });
 
+    // Initialize form count
+    this._lastFormCount = pageData.forms.length;
+
     if (this._config.enableFormDetection && pageData.forms.length > 0) {
       this.emit('forms:detected', {
         forms: pageData.forms,
@@ -320,6 +325,22 @@ class PageMonitor extends BaseBlock {
 
   _filterSignificantMutations(mutations) {
     return mutations.filter(mutation => {
+      // Filter out dashboard self-updates
+      if (this._isDashboardElement(mutation.target)) {
+        return false;
+      }
+      
+      // Filter out added/removed nodes that are dashboard elements
+      if (mutation.type === 'childList') {
+        const hasNonDashboardChanges = 
+          Array.from(mutation.addedNodes).some(node => !this._isDashboardElement(node)) ||
+          Array.from(mutation.removedNodes).some(node => !this._isDashboardElement(node));
+        
+        if (!hasNonDashboardChanges) {
+          return false;
+        }
+      }
+      
       if (mutation.type === 'attributes') {
         return this._isSignificantAttributeChange(mutation);
       }
@@ -330,6 +351,37 @@ class PageMonitor extends BaseBlock {
       
       return false;
     });
+  }
+
+  _isDashboardElement(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+    if (!element.closest) return false;
+    
+    // Check if element is part of the dashboard/testing interface
+    return element.closest('#module-status') ||
+           element.closest('.module-status') ||
+           element.closest('[id*="event"]') ||
+           element.closest('[class*="event"]') ||
+           element.closest('[id*="display"]') ||
+           element.closest('[class*="display"]') ||
+           element.closest('[id*="working"]') ||
+           element.closest('[class*="working"]') ||
+           element.closest('.status-card') ||
+           element.closest('.status-panel') ||
+           element.closest('.event-log') ||
+           element.closest('.event-container') ||
+           element.closest('.log-controls') ||
+           element.closest('[id*="status"]') ||
+           element.closest('[class*="status"]') ||
+           element.closest('[class*="stats"]') ||
+           element.closest('[class*="uptime"]') ||
+           element.id === 'workingEventsList' ||
+           element.id === 'eventContainer' ||
+           (element.className && typeof element.className === 'string' && (
+             element.className.includes('status') ||
+             element.className.includes('module') ||
+             element.className.includes('event')
+           ));
   }
 
   _isSignificantAttributeChange(mutation) {
@@ -398,11 +450,31 @@ class PageMonitor extends BaseBlock {
     const batch = this._mutationQueue.splice(0, this._config.mutationBatchSize);
     const mutationSummary = this._summarizeMutations(batch);
 
-    this.emit('page:dom:mutated', {
-      summary: mutationSummary,
-      count: batch.length,
-      timestamp: new Date().toISOString()
-    });
+    // Check if this is purely a form change
+    // When adding/removing a form, the container is affected too, so check <= 2 elements
+    const isOnlyFormChange = this._config.enableFormDetection && 
+                            mutationSummary.affectedElements <= 2 &&
+                            (mutationSummary.addedForms > 0 || mutationSummary.removedForms > 0);
+    
+    // Only emit dom:mutated if there are non-form changes
+    if (!isOnlyFormChange) {
+      this.emit('page:dom:mutated', {
+        summary: mutationSummary,
+        count: batch.length,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Handle form changes separately with debouncing
+    if (this._config.enableFormDetection && (mutationSummary.addedForms > 0 || mutationSummary.removedForms > 0)) {
+      if (this._formChangeDebouncer) {
+        clearTimeout(this._formChangeDebouncer);
+      }
+      
+      this._formChangeDebouncer = setTimeout(() => {
+        this._detectFormChanges();
+      }, 100);
+    }
 
     if (this._domStabilizationTimer) {
       clearTimeout(this._domStabilizationTimer);
@@ -460,12 +532,19 @@ class PageMonitor extends BaseBlock {
     const newSignature = this._generatePageSignature();
     
     if (newSignature !== this._currentPageSignature) {
-      const changeScore = this._calculateChangeScore(
+      const changeDetails = this._calculateChangeScore(
         this._currentPageSignature,
         newSignature
       );
 
-      if (changeScore >= this._config.significantChangeThreshold) {
+      // Skip page change event if this is only a form change
+      if (changeDetails.isFormOnlyChange) {
+        // Update signature without emitting page:changed
+        this._currentPageSignature = newSignature;
+        return;
+      }
+
+      if (changeDetails.score >= this._config.significantChangeThreshold) {
         this._handlePageChange(newSignature, 'dom_mutation');
       }
     }
@@ -492,14 +571,8 @@ class PageMonitor extends BaseBlock {
     
     this.emit('page:changed', changeData);
 
-    if (this._config.enableFormDetection && pageData.forms.length > 0) {
-      this.emit('forms:detected', {
-        forms: pageData.forms,
-        count: pageData.forms.length,
-        url: this._currentUrl,
-        trigger: 'page_change'
-      });
-    }
+    // Don't emit duplicate form detection during page changes
+    // The form changes are already handled by _detectFormChanges
   }
 
   _handleAjaxComplete(request) {
@@ -518,6 +591,26 @@ class PageMonitor extends BaseBlock {
   _handlePageShow() {
     this._checkUrlChange();
     this._checkForPageChange();
+  }
+
+  _detectFormChanges() {
+    const currentForms = document.querySelectorAll('form').length;
+    
+    // Only emit when forms are ADDED (form discovery), not removed
+    if (currentForms > this._lastFormCount) {
+      const formData = this._analyzeCurrentPage().forms;
+      
+      this.emit('forms:detected', {
+        forms: formData,
+        count: currentForms,
+        previousCount: this._lastFormCount,
+        url: this._currentUrl,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Always update the count, even for removals (silent tracking)
+    this._lastFormCount = currentForms;
   }
 
   _generatePageSignature() {
@@ -559,22 +652,73 @@ class PageMonitor extends BaseBlock {
       const newData = JSON.parse(newSignature);
       
       let score = 0;
+      let changes = {
+        title: false,
+        forms: false,
+        inputs: false,
+        content: false,
+        classes: false,
+        dataAttrs: false
+      };
       
-      if (oldData.title !== newData.title) score += 3;
-      if (Math.abs(oldData.forms - newData.forms) > 0) score += 5;
-      if (Math.abs(oldData.inputs - newData.inputs) > 2) score += 3;
-      if (Math.abs(oldData.mainContent - newData.mainContent) > 100) score += 4;
-      if (oldData.bodyClasses !== newData.bodyClasses) score += 2;
+      if (oldData.title !== newData.title) {
+        score += 3;
+        changes.title = true;
+      }
+      
+      const formDiff = Math.abs(oldData.forms - newData.forms);
+      const inputDiff = Math.abs(oldData.inputs - newData.inputs);
+      
+      if (formDiff > 0) {
+        score += 5;
+        changes.forms = true;
+      }
+      
+      if (inputDiff > 2) {
+        score += 3;
+        changes.inputs = true;
+      }
+      
+      if (Math.abs(oldData.mainContent - newData.mainContent) > 100) {
+        score += 4;
+        changes.content = true;
+      }
+      
+      if (oldData.bodyClasses !== newData.bodyClasses) {
+        score += 2;
+        changes.classes = true;
+      }
       
       const dataAttrChanges = Object.keys(oldData.dataAttributes).filter(
         key => oldData.dataAttributes[key] !== newData.dataAttributes[key]
       ).length;
       
-      score += dataAttrChanges * 3;
+      if (dataAttrChanges > 0) {
+        score += dataAttrChanges * 3;
+        changes.dataAttrs = true;
+      }
       
-      return score;
+      // Determine if this is a form-only change
+      // Form additions typically change forms count and inputs count proportionally
+      const isFormOnlyChange = changes.forms && 
+                              !changes.title && 
+                              !changes.content && 
+                              !changes.classes && 
+                              !changes.dataAttrs &&
+                              // Input changes should be proportional to form changes
+                              (inputDiff <= formDiff * 10); // Allow up to 10 inputs per form
+      
+      return {
+        score,
+        changes,
+        isFormOnlyChange
+      };
     } catch (error) {
-      return 10;
+      return {
+        score: 10,
+        changes: {},
+        isFormOnlyChange: false
+      };
     }
   }
 

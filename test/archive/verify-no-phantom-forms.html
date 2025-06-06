@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify No Phantom Forms</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-size: 18px;
+        }
+        .status.clean {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #dc3545;
+        }
+        .event-log {
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 200px;
+        }
+        .event {
+            margin: 5px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .form-count {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Verify No Phantom Forms</h1>
+    
+    <div id="status" class="status">
+        <p>Current form count in DOM: <span class="form-count" id="formCount">?</span></p>
+        <p id="statusMessage">Click "Initialize System" to start</p>
+    </div>
+    
+    <div>
+        <button onclick="initSystem()">Initialize System</button>
+        <button onclick="checkForms()">Check Form Count</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div class="event-log">
+        <h3>Event Log:</h3>
+        <div id="events"></div>
+    </div>
+
+    <script src="../src/shared/EventBus.js"></script>
+    <script src="../src/shared/BaseBlock.js"></script>
+    <script src="../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        let eventBus, pageMonitor;
+        let initTime;
+        
+        function updateFormCount() {
+            const formCount = document.querySelectorAll('form').length;
+            document.getElementById('formCount').textContent = formCount;
+            return formCount;
+        }
+        
+        async function initSystem() {
+            console.log('Initializing system...');
+            initTime = Date.now();
+            
+            // Check forms before init
+            const formsBefore = updateFormCount();
+            logEvent(`BEFORE INIT: ${formsBefore} forms in DOM`, 'info');
+            
+            eventBus = new EventBus({
+                debugMode: false,
+                enforceModuleRegistration: true
+            });
+            
+            pageMonitor = new PageMonitor(eventBus, {
+                debugMode: false,
+                mutationThrottle: 250,
+                domStabilizationDelay: 300,
+                enableFormDetection: true,
+                significantChangeThreshold: 8
+            });
+            
+            // Listen for all events
+            const events = ['page:initial', 'forms:detected', 'page:changed'];
+            events.forEach(eventName => {
+                eventBus.on(eventName, (data) => {
+                    const elapsed = Date.now() - initTime;
+                    
+                    if (eventName === 'forms:detected') {
+                        logEvent(`⚠️ ${eventName} - Count: ${data.count || 0} at +${elapsed}ms`, 'warning');
+                        document.getElementById('status').className = 'status error';
+                        document.getElementById('statusMessage').textContent = 
+                            `❌ PHANTOM FORMS DETECTED! PageMonitor found ${data.count} forms on init!`;
+                    } else {
+                        logEvent(`${eventName} at +${elapsed}ms`, 'normal');
+                    }
+                });
+            });
+            
+            await pageMonitor.start();
+            
+            // Check forms after init
+            setTimeout(() => {
+                const formsAfter = updateFormCount();
+                logEvent(`AFTER INIT: ${formsAfter} forms in DOM`, 'info');
+                
+                if (formsAfter === 0) {
+                    document.getElementById('status').className = 'status clean';
+                    document.getElementById('statusMessage').textContent = 
+                        '✅ CLEAN START! No phantom forms detected on initialization.';
+                }
+            }, 100);
+        }
+        
+        function checkForms() {
+            const count = updateFormCount();
+            logEvent(`Manual check: ${count} forms in DOM`, 'info');
+            
+            // List all forms found
+            const forms = document.querySelectorAll('form');
+            forms.forEach((form, i) => {
+                const parent = form.parentElement;
+                logEvent(`Form ${i + 1}: in ${parent.tagName}#${parent.id || 'no-id'}`, 'detail');
+            });
+        }
+        
+        function logEvent(message, type = 'normal') {
+            const eventsDiv = document.getElementById('events');
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event';
+            
+            if (type === 'warning') {
+                eventDiv.style.background = '#fff3cd';
+                eventDiv.style.color = '#856404';
+            } else if (type === 'info') {
+                eventDiv.style.background = '#cce5ff';
+                eventDiv.style.color = '#004085';
+            }
+            
+            eventDiv.textContent = message;
+            eventsDiv.appendChild(eventDiv);
+        }
+        
+        function clearLog() {
+            document.getElementById('events').innerHTML = '';
+        }
+        
+        // Check on load
+        window.addEventListener('load', () => {
+            updateFormCount();
+        });
+    </script>
+</body>
+</html>

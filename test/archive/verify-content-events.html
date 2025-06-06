@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Content Events</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .event {
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f0f0f0;
+        }
+        .event.content-added {
+            background: #d4edda;
+            color: #155724;
+        }
+        .event.page-dom-mutated {
+            background: #cce5ff;
+            color: #004085;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        #events {
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 200px;
+        }
+        .timing {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Verify Content Events</h1>
+    <p>Expected: content:added immediately, then page:dom:mutated after ~250ms</p>
+    
+    <button onclick="initSystem()">Initialize System</button>
+    <button onclick="testAddContent()">Add Dynamic Content</button>
+    <button onclick="clearEvents()">Clear Events</button>
+    
+    <div id="events">
+        <h3>Events Log:</h3>
+    </div>
+
+    <script src="../src/shared/EventBus.js"></script>
+    <script src="../src/shared/BaseBlock.js"></script>
+    <script src="../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        let eventBus, pageMonitor;
+        let testStartTime;
+        
+        async function initSystem() {
+            console.log('Initializing system...');
+            
+            eventBus = new EventBus({
+                debugMode: false,
+                enforceModuleRegistration: true
+            });
+            
+            pageMonitor = new PageMonitor(eventBus, {
+                debugMode: false,
+                mutationThrottle: 250,
+                domStabilizationDelay: 300,
+                enableFormDetection: true,
+                significantChangeThreshold: 8
+            });
+            
+            // Listen for events
+            eventBus.on('content:added', (data) => {
+                logEvent('content:added', data);
+            });
+            
+            eventBus.on('page:dom:mutated', (data) => {
+                logEvent('page:dom:mutated', data);
+            });
+            
+            await pageMonitor.start();
+            console.log('System initialized!');
+            alert('System initialized! Now click "Add Dynamic Content"');
+        }
+        
+        function logEvent(eventName, data) {
+            const eventsDiv = document.getElementById('events');
+            const eventDiv = document.createElement('div');
+            eventDiv.className = `event ${eventName.replace(':', '-')}`;
+            
+            const elapsed = testStartTime ? Date.now() - testStartTime : 0;
+            
+            eventDiv.innerHTML = `
+                <strong>${eventName}</strong>
+                <span class="timing">+${elapsed}ms</span>
+                ${data?.type ? `<br>Type: ${data.type}` : ''}
+                ${data?.trigger ? `<br>Trigger: ${data.trigger}` : ''}
+            `;
+            
+            eventsDiv.appendChild(eventDiv);
+        }
+        
+        function testAddContent() {
+            if (!eventBus || !pageMonitor) {
+                alert('Initialize system first!');
+                return;
+            }
+            
+            testStartTime = Date.now();
+            
+            // First emit content:added
+            console.log('Emitting content:added...');
+            eventBus.emit('content:added', {
+                type: 'test-content',
+                trigger: 'manual-button',
+                timestamp: new Date().toISOString()
+            });
+            
+            // Then add content to DOM
+            const container = document.createElement('div');
+            container.style.cssText = 'border: 2px solid #f59e0b; padding: 20px; margin: 20px; background: #fff3cd;';
+            container.innerHTML = '<h3>Test Content</h3><p>This will trigger page:dom:mutated</p>';
+            document.body.appendChild(container);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                container.remove();
+            }, 3000);
+        }
+        
+        function clearEvents() {
+            const eventsDiv = document.getElementById('events');
+            eventsDiv.innerHTML = '<h3>Events Log:</h3>';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Button Behavior Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            border: 2px solid #333;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .test-run {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        .event {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-left: 3px solid #667eea;
+        }
+        .no-event {
+            color: #999;
+            font-style: italic;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .success { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Button Behavior Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Setup</h2>
+        <button onclick="initializeSystem()">Initialize System</button>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <div id="status"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Toggle Form Test Results</h2>
+        <p>Expected: forms:detected ONLY when adding forms, NO event when removing</p>
+        <div id="form-test-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Add Content Test Results</h2>
+        <p>Expected: page:dom:mutated after ~250ms delay</p>
+        <div id="content-test-results"></div>
+    </div>
+
+    <script src="../src/shared/EventBus.js"></script>
+    <script src="../src/shared/BaseBlock.js"></script>
+    <script src="../src/foundation-tier/PageMonitor.js"></script>
+    
+    <script>
+        let eventBus, pageMonitor;
+        let capturedEvents = [];
+        
+        function captureEvent(eventName, data) {
+            capturedEvents.push({
+                event: eventName,
+                timestamp: Date.now(),
+                data: data
+            });
+        }
+        
+        async function initializeSystem() {
+            const status = document.getElementById('status');
+            status.textContent = 'Initializing...';
+            
+            try {
+                eventBus = new EventBus({
+                    debugMode: false,
+                    enforceModuleRegistration: true
+                });
+                
+                pageMonitor = new PageMonitor(eventBus, {
+                    debugMode: false,
+                    mutationThrottle: 250,
+                    domStabilizationDelay: 300,
+                    enableFormDetection: true,
+                    significantChangeThreshold: 8
+                });
+                
+                // Capture relevant events
+                ['forms:detected', 'page:dom:mutated', 'page:changed'].forEach(eventName => {
+                    eventBus.on(eventName, (data) => captureEvent(eventName, data));
+                });
+                
+                await pageMonitor.start();
+                status.innerHTML = '<span class="success">✅ System initialized</span>';
+            } catch (error) {
+                status.innerHTML = `<span class="fail">❌ Failed: ${error.message}</span>`;
+            }
+        }
+        
+        async function runFormTest() {
+            const results = document.getElementById('form-test-results');
+            results.innerHTML = '<h3>Running 5 test cycles...</h3>';
+            
+            for (let i = 1; i <= 5; i++) {
+                const runDiv = document.createElement('div');
+                runDiv.className = 'test-run';
+                runDiv.innerHTML = `<strong>Test Run ${i}:</strong>`;
+                results.appendChild(runDiv);
+                
+                // Test adding form
+                capturedEvents = [];
+                const testContainer = document.createElement('div');
+                testContainer.id = `test-form-container-${i}`;
+                document.body.appendChild(testContainer);
+                
+                const form = document.createElement('form');
+                form.innerHTML = '<input type="text"><button>Submit</button>';
+                testContainer.appendChild(form);
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+                const addEvents = capturedEvents.filter(e => e.timestamp > Date.now() - 700);
+                runDiv.innerHTML += '<br>ADD FORM: ';
+                if (addEvents.length === 0) {
+                    runDiv.innerHTML += '<span class="no-event">No events (ERROR - should have forms:detected)</span>';
+                } else {
+                    addEvents.forEach(e => {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'event';
+                        eventDiv.textContent = `${e.event} at +${e.timestamp - (Date.now() - 600)}ms`;
+                        runDiv.appendChild(eventDiv);
+                    });
+                }
+                
+                // Test removing form
+                capturedEvents = [];
+                form.remove();
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+                const removeEvents = capturedEvents.filter(e => e.timestamp > Date.now() - 700);
+                runDiv.innerHTML += '<br>REMOVE FORM: ';
+                if (removeEvents.length === 0) {
+                    runDiv.innerHTML += '<span class="success">✅ No events (correct - silent removal)</span>';
+                } else {
+                    runDiv.innerHTML += '<span class="fail">❌ Events fired (ERROR):</span>';
+                    removeEvents.forEach(e => {
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'event';
+                        eventDiv.textContent = `${e.event} (UNEXPECTED)`;
+                        runDiv.appendChild(eventDiv);
+                    });
+                }
+                
+                // Clean up
+                testContainer.remove();
+                
+                // Small delay between runs
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        }
+        
+        async function runContentTest() {
+            const results = document.getElementById('content-test-results');
+            results.innerHTML = '<h3>Running 5 test cycles...</h3>';
+            
+            for (let i = 1; i <= 5; i++) {
+                const runDiv = document.createElement('div');
+                runDiv.className = 'test-run';
+                runDiv.innerHTML = `<strong>Test Run ${i}:</strong>`;
+                results.appendChild(runDiv);
+                
+                capturedEvents = [];
+                const startTime = Date.now();
+                
+                // Add content
+                const content = document.createElement('div');
+                content.innerHTML = '<h3>Test Content</h3><p>Some dynamic content</p>';
+                document.body.appendChild(content);
+                
+                // Wait for events
+                await new Promise(resolve => setTimeout(resolve, 600));
+                
+                const events = capturedEvents.filter(e => e.timestamp > startTime);
+                if (events.length === 0) {
+                    runDiv.innerHTML += '<span class="fail">❌ No events fired</span>';
+                } else {
+                    events.forEach(e => {
+                        const delay = e.timestamp - startTime;
+                        const eventDiv = document.createElement('div');
+                        eventDiv.className = 'event';
+                        
+                        if (e.event === 'page:dom:mutated' && delay >= 200 && delay <= 350) {
+                            eventDiv.innerHTML = `<span class="success">✅ ${e.event} at +${delay}ms (correct timing)</span>`;
+                        } else if (e.event === 'page:dom:mutated') {
+                            eventDiv.innerHTML = `${e.event} at +${delay}ms (timing off)`;
+                        } else {
+                            eventDiv.innerHTML = `<span class="fail">❌ ${e.event} at +${delay}ms (unexpected event)</span>`;
+                        }
+                        
+                        runDiv.appendChild(eventDiv);
+                    });
+                }
+                
+                // Clean up
+                content.remove();
+                
+                // Small delay between runs
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        }
+        
+        async function runAllTests() {
+            await runFormTest();
+            await runContentTest();
+        }
+    </script>
+</body>
+</html>
